@@ -1,435 +1,224 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Von Winsen nach…</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Von Winsen nach…</title>
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      font-family: Roboto, Arial, sans-serif;
-      background: #000;
-      overflow: hidden;
-    }
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: Roboto, Arial;
+  background: #000;
+  overflow: hidden;
+}
 
-    #app {
-      display: flex;
-      width: 100%;
-      height: 100%;
-    }
+#app { display:flex; height:100%; }
 
-    #panel {
-      width: 340px;
-      min-width: 340px;
-      background: #000;
-      color: #fff;
-      padding: 24px 16px;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      z-index: 1000;
-    }
+#panel {
+  width: 360px;
+  background: #000;
+  color: #fff;
+  padding: 24px;
+}
 
-    #title {
-      font-size: 28px;
-      font-weight: 700;
-      line-height: 1.2;
-      margin: 8px 0 6px 0;
-    }
+#title, #subtitle {
+  font-size: 28px;
+  font-weight: 700;
+}
 
-    #subtitle {
-      font-size: 15px;
-      color: rgba(255,255,255,0.72);
-      min-height: 18px;
-    }
+#subtitle { margin-bottom:20px; }
 
-    .section-label {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.7);
-      margin-bottom: 4px;
-    }
+.section-label {
+  font-size: 14px;
+  text-transform: uppercase;
+  margin: 10px 0;
+  opacity: 0.7;
+}
 
-    .button-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
+.panel-btn {
+  width: 100%;
+  padding: 14px;
+  margin: 6px 0;
+  background: #333;
+  color: #fff;
+  border: none;
+  font-size: 18px;
+}
 
-    .panel-btn {
-      width: 100%;
-      border: none;
-      background: #2c2c2c;
-      color: #fff;
-      padding: 16px 14px;
-      font-size: 18px;
-      line-height: 1.2;
-      text-align: center;
-      cursor: pointer;
-      transition: background 0.18s ease;
-    }
+#mapWrap { flex:1; position:relative; }
+#map { height:100%; }
 
-    .panel-btn:hover { background: #3a3a3a; }
-    .panel-btn.active { background: #4b4b4b; }
-    .panel-btn.transport { font-size: 17px; padding: 14px 12px; }
+.overlay {
+  position:absolute;
+  pointer-events:none;
+}
 
-    #transportSection { display: none; }
+/* CO2 Kreis */
+#co2Bubble {
+  width:120px;
+  height:120px;
+  background:#1f1f1f;
+  border-radius:50%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  color:white;
+  font-weight:bold;
+}
 
-    #mapWrap {
-      position: relative;
-      flex: 1;
-      height: 100%;
-    }
+/* Zeit Anzeige */
+#timeDisplay {
+  background:#2b2b2b;
+  color:#39ff14;
+  font-family: monospace;
+  font-size:32px;
+  padding:8px 12px;
+  border-radius:8px;
+}
 
-    #map {
-      width: 100%;
-      height: 100%;
-    }
-
-    .overlay {
-      position: absolute;
-      z-index: 1200;
-      pointer-events: none;
-      opacity: 0;
-      transform: scale(0.96);
-      transition: opacity 0.28s ease, transform 0.28s ease;
-    }
-
-    .overlay.visible {
-      opacity: 1;
-      transform: scale(1);
-    }
-
-    #co2Bubble {
-      background: rgba(0,0,0,0.88);
-      color: #fff;
-      border-radius: 999px;
-      padding: 10px 16px;
-      font-size: 21px;
-      font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-
-    #timeDisplay {
-      color: #fff;
-      font-family: "Courier New", monospace;
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      background: rgba(0,0,0,0.55);
-      padding: 6px 12px;
-      border-radius: 10px;
-      white-space: nowrap;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-    }
-
-    #statusMessage {
-      font-size: 14px;
-      color: rgba(255,255,255,0.75);
-      min-height: 18px;
-    }
-
-    .leaflet-control-attribution {
-      display: none !important;
-    }
-  </style>
+#nextBtn {
+  margin-top:20px;
+}
+</style>
 </head>
+
 <body>
-  <div id="app">
-    <aside id="panel">
-      <div id="title">Von Winsen nach…</div>
-      <div id="subtitle"></div>
-      <div id="statusMessage"></div>
 
-      <div>
-        <div class="section-label">Ziele</div>
-        <div id="destinationList" class="button-list"></div>
-      </div>
+<div id="app">
 
-      <div id="transportSection">
-        <div class="section-label">Verkehrsmittel</div>
-        <div id="transportList" class="button-list"></div>
-      </div>
-    </aside>
+<div id="panel">
+  <div id="title">Von Winsen nach…</div>
+  <div id="subtitle"></div>
 
-    <div id="mapWrap">
-      <div id="map"></div>
-      <div id="co2Bubble" class="overlay"></div>
-      <div id="timeDisplay" class="overlay"></div>
-    </div>
+  <div id="destSection">
+    <div class="section-label">Ziele</div>
+    <div id="destList"></div>
   </div>
 
-  <script>
-    const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjZTUyYmU5YWFkZDRlMjI5ZGQyZWJkOTQzZjZlYWZkIiwiaCI6Im11cm11cjY0In0=";
+  <div id="transportSection" style="display:none;">
+    <div class="section-label">Verkehrsmittel</div>
+    <div id="transportList"></div>
+  </div>
 
-    const winsen = [53.3608, 10.2125];
+  <button id="nextBtn" style="display:none;">Nächstes Ziel</button>
 
-    const destinations = {
-      "Tespe": {
-        center: [53.3980, 10.4150],
-        values: {
-          "Auto":   { co2: "2,4 kg CO₂", time: "00:19" },
-          "E-Auto": { co2: "1,1 kg CO₂", time: "00:19" },
-          "ÖPNV":   { co2: "0,9 kg CO₂", time: "00:43" },
-          "E-Bike": { co2: "0 kg CO₂",   time: "00:46" }
-        }
-      },
-      "Hamburg Großneumarkt": {
-        center: [53.5505, 9.9775],
-        values: {
-          "Auto":   { co2: "7,8 kg CO₂", time: "00:37" },
-          "E-Auto": { co2: "3,4 kg CO₂", time: "00:37" },
-          "ÖPNV":   { co2: "2,6 kg CO₂", time: "00:48" },
-          "E-Bike": { co2: "0 kg CO₂",   time: "01:54" }
-        }
-      },
-      "Bendestorf": {
-        center: [53.3425, 9.9660],
-        values: {
-          "Auto":   { co2: "4,1 kg CO₂", time: "00:24" },
-          "E-Auto": { co2: "1,8 kg CO₂", time: "00:24" },
-          "ÖPNV":   { co2: "1,7 kg CO₂", time: "00:52" },
-          "E-Bike": { co2: "0 kg CO₂",   time: "01:05" }
-        }
-      },
-      "Gifhorn Mühlenmuseum": {
-        center: [52.4870, 10.5500],
-        values: {
-          "Auto":   { co2: "16,8 kg CO₂", time: "01:22" },
-          "E-Auto": { co2: "7,0 kg CO₂",  time: "01:22" },
-          "ÖPNV":   { co2: "6,3 kg CO₂",  time: "02:31" },
-          "E-Bike": { co2: "0 kg CO₂",    time: "04:42" }
-        }
-      },
-      "Hannover Flughafen": {
-        center: [52.4612, 9.6851],
-        values: {
-          "Auto":   { co2: "18,9 kg CO₂", time: "01:28" },
-          "E-Auto": { co2: "7,9 kg CO₂",  time: "01:28" },
-          "ÖPNV":   { co2: "7,2 kg CO₂",  time: "02:12" },
-          "E-Bike": { co2: "0 kg CO₂",    time: "05:08" }
-        }
-      }
-    };
+</div>
 
-    const transportModes = ["Auto", "E-Auto", "ÖPNV", "E-Bike"];
+<div id="mapWrap">
+  <div id="map"></div>
+  <div id="co2Bubble" class="overlay"></div>
+  <div id="timeDisplay" class="overlay"></div>
+</div>
 
-    const orsProfiles = {
-      "Auto": "driving-car",
-      "E-Auto": "driving-car",
-      "E-Bike": "cycling-regular"
-      // ÖPNV bekommt hier absichtlich keine Live-Route
-    };
+</div>
 
-    const map = L.map('map', {
-      zoomControl: true,
-      preferCanvas: true
-    }).setView([53.18, 10.06], 9);
+<script>
+const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFjZTUyYmU5YWFkZDRlMjI5ZGQyZWJkOTQzZjZlYWZkIiwiaCI6Im11cm11cjY0In0=";
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18
-    }).addTo(map);
+const winsen = [53.3608,10.2125];
 
-    L.marker(winsen).addTo(map);
+const destinations = {
+  "Tespe":[53.40,10.32],
+  "Hamburg Großneumarkt":[53.55,9.98],
+  "Bendestorf":[53.34,9.97],
+  "Gifhorn":[52.48,10.55],
+  "Hannover Flughafen":[52.46,9.68]
+};
 
-    let destinationMarker = null;
-    let routeLine = null;
-    let currentDestination = null;
-    let currentTransport = null;
+const values = {
+  "Tespe":{"Auto":["2kg","00:15"],"E-Auto":["1kg","00:15"],"ÖPNV":["1.5kg","00:35"],"E-Bike":["0kg","00:45"]},
+  "Hamburg Großneumarkt":{"Auto":["8kg","00:35"],"E-Auto":["4kg","00:35"],"ÖPNV":["3kg","00:50"],"E-Bike":["0kg","01:20"]},
+  "Bendestorf":{"Auto":["4kg","00:20"],"E-Auto":["2kg","00:20"],"ÖPNV":["2kg","00:45"],"E-Bike":["0kg","00:55"]},
+  "Gifhorn":{"Auto":["15kg","01:20"],"E-Auto":["6kg","01:20"],"ÖPNV":["5kg","02:00"],"E-Bike":["0kg","04:00"]},
+  "Hannover Flughafen":{"Auto":["18kg","01:30"],"E-Auto":["7kg","01:30"],"ÖPNV":["6kg","02:10"],"E-Bike":["0kg","05:00"]}
+};
 
-    const subtitle = document.getElementById('subtitle');
-    const statusMessage = document.getElementById('statusMessage');
-    const destinationList = document.getElementById('destinationList');
-    const transportSection = document.getElementById('transportSection');
-    const transportList = document.getElementById('transportList');
-    const co2Bubble = document.getElementById('co2Bubble');
-    const timeDisplay = document.getElementById('timeDisplay');
+let map=L.map('map').setView([53.2,10],9);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+L.marker(winsen).addTo(map);
 
-    function resetOverlays() {
-      co2Bubble.classList.remove('visible');
-      timeDisplay.classList.remove('visible');
-    }
+let routeLine=null;
+let currentDest=null;
 
-    function clearTransportSelection() {
-      transportList.querySelectorAll('.panel-btn').forEach(btn => btn.classList.remove('active'));
-      currentTransport = null;
-      resetOverlays();
-    }
+const destList=document.getElementById("destList");
+const transportList=document.getElementById("transportList");
 
-    function setActiveDestinationButton(name) {
-      destinationList.querySelectorAll('.panel-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.name === name);
-      });
-    }
+for(let d in destinations){
+  let b=document.createElement("button");
+  b.innerText=d;
+  b.className="panel-btn";
+  b.onclick=()=>selectDest(d);
+  destList.appendChild(b);
+}
 
-    function setActiveTransportButton(mode) {
-      transportList.querySelectorAll('.panel-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-      });
-    }
+function selectDest(d){
+  currentDest=d;
+  document.getElementById("subtitle").innerText=d;
+  document.getElementById("destSection").style.display="none";
+  document.getElementById("transportSection").style.display="block";
+  document.getElementById("nextBtn").style.display="block";
+}
 
-    function showDestinationMarker(latlng) {
-      if (destinationMarker) map.removeLayer(destinationMarker);
-      destinationMarker = L.marker(latlng).addTo(map);
-    }
+["Auto","E-Auto","ÖPNV","E-Bike"].forEach(v=>{
+  let b=document.createElement("button");
+  b.innerText=v;
+  b.className="panel-btn";
+  b.onclick=()=>loadRoute(v);
+  transportList.appendChild(b);
+});
 
-    function clearRoute() {
-      if (routeLine) {
-        map.removeLayer(routeLine);
-        routeLine = null;
-      }
-    }
+async function loadRoute(v){
+  let profile=(v==="E-Bike")?"cycling-regular":"driving-car";
+  let dest=destinations[currentDest];
 
-    function updateOverlayPosition() {
-      if (!routeLine || !currentTransport) return;
-      const center = routeLine.getBounds().getCenter();
-      const point = map.latLngToContainerPoint(center);
+  let res=await fetch("https://api.openrouteservice.org/v2/directions/"+profile+"/geojson",{
+    method:"POST",
+    headers:{
+      "Authorization":ORS_API_KEY,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      coordinates:[[winsen[1],winsen[0]],[dest[1],dest[0]]]
+    })
+  });
 
-      co2Bubble.style.left = `${point.x - 45}px`;
-      co2Bubble.style.top = `${point.y + 6}px`;
+  let data=await res.json();
 
-      timeDisplay.style.left = `${point.x + 48}px`;
-      timeDisplay.style.top = `${point.y - 26}px`;
-    }
+  if(routeLine) map.removeLayer(routeLine);
 
-    function showTransportData(mode) {
-      const values = destinations[currentDestination].values[mode];
-      if (!values) return;
+  routeLine=L.geoJSON(data).addTo(map);
+  map.fitBounds(routeLine.getBounds());
 
-      currentTransport = mode;
-      setActiveTransportButton(mode);
+  showOverlay(v);
+}
 
-      co2Bubble.textContent = values.co2;
-      timeDisplay.textContent = values.time;
+function showOverlay(v){
+  let val=values[currentDest][v];
 
-      if (routeLine) {
-        updateOverlayPosition();
-        co2Bubble.classList.add('visible');
-        timeDisplay.classList.add('visible');
-      }
-    }
+  let center=routeLine.getBounds().getCenter();
+  let p=map.latLngToContainerPoint(center);
 
-    async function loadRoute(destinationName, mode) {
-      const dest = destinations[destinationName];
-      const profile = orsProfiles[mode];
+  let co2=document.getElementById("co2Bubble");
+  co2.innerHTML=val[0]+"<br>CO₂";
+  co2.style.left=(p.x-60)+"px";
+  co2.style.top=(p.y+10)+"px";
 
-      clearRoute();
-      resetOverlays();
+  let time=document.getElementById("timeDisplay");
+  time.innerText=val[1];
+  time.style.left=(p.x+70)+"px";
+  time.style.top=(p.y-30)+"px";
+}
 
-      if (!profile) {
-        statusMessage.textContent = "Für ÖPNV wird hier keine Live-Route geladen.";
-        return;
-      }
+document.getElementById("nextBtn").onclick=()=>{
+  location.reload();
+};
+</script>
 
-      statusMessage.textContent = "Route wird geladen…";
-
-      const startLonLat = `${winsen[1]},${winsen[0]}`;
-      const endLonLat = `${dest.center[1]},${dest.center[0]}`;
-
-      const url = `https://api.openrouteservice.org/v2/directions/${profile}/geojson`;
-
-      try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Authorization": ORS_API_KEY,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            coordinates: [
-              [winsen[1], winsen[0]],
-              [dest.center[1], dest.center[0]]
-            ]
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.features || !data.features.length) {
-          throw new Error("Keine Route erhalten");
-        }
-
-        routeLine = L.geoJSON(data, {
-          style: {
-            color: "#0b46ff",
-            weight: 5,
-            opacity: 0.95
-          }
-        }).addTo(map);
-
-        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
-
-        statusMessage.textContent = "";
-        showTransportData(mode);
-
-      } catch (error) {
-        console.error(error);
-        statusMessage.textContent = "Die Route konnte gerade nicht geladen werden.";
-      }
-    }
-
-    function selectDestination(name) {
-      currentDestination = name;
-      subtitle.textContent = name;
-      setActiveDestinationButton(name);
-      clearTransportSelection();
-      transportSection.style.display = "block";
-      statusMessage.textContent = "";
-
-      showDestinationMarker(destinations[name].center);
-      clearRoute();
-
-      map.fitBounds(L.latLngBounds([winsen, destinations[name].center]), {
-        padding: [80, 80]
-      });
-    }
-
-    function buildDestinations() {
-      Object.keys(destinations).forEach(name => {
-        const btn = document.createElement('button');
-        btn.className = 'panel-btn';
-        btn.textContent = name;
-        btn.dataset.name = name;
-        btn.addEventListener('click', () => selectDestination(name));
-        destinationList.appendChild(btn);
-      });
-    }
-
-    function buildTransportButtons() {
-      transportModes.forEach(mode => {
-        const btn = document.createElement('button');
-        btn.className = 'panel-btn transport';
-        btn.textContent = mode;
-        btn.dataset.mode = mode;
-        btn.addEventListener('click', () => {
-          if (!currentDestination) return;
-          loadRoute(currentDestination, mode);
-        });
-        transportList.appendChild(btn);
-      });
-    }
-
-    buildDestinations();
-    buildTransportButtons();
-
-    map.on('move zoom resize', () => {
-      if (currentTransport && routeLine) {
-        updateOverlayPosition();
-      }
-    });
-  </script>
 </body>
 </html>
