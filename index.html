@@ -1,188 +1,487 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mobilität</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Von Winsen nach…</title>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-body, html { margin:0; height:100%; font-family: Roboto, Arial; }
-
-#map { position:absolute; top:0; bottom:0; right:0; left:300px; }
-
-#panel {
-  position:absolute;
-  left:0;
-  top:0;
-  bottom:0;
-  width:300px;
-  background:#111;
-  color:white;
-  padding:20px;
-}
-
-button {
-  display:block;
-  width:100%;
-  margin:10px 0;
-  padding:10px;
-  background:#333;
-  color:white;
-  border:none;
-  cursor:pointer;
-}
-
-button:hover { background:#555; }
-
-#overlayCO2 {
-  position:absolute;
-  background:black;
-  color:white;
-  padding:8px 14px;
-  border-radius:20px;
-  font-weight:bold;
-  display:none;
-}
-
-#overlayTime {
-  position:absolute;
-  color:white;
-  font-size:22px;
-  font-family: monospace;
-  display:none;
-}
-</style>
-</head>
-
-<body>
-
-<div id="panel">
-  <h2>Von Winsen nach…</h2>
-  <div id="ziele"></div>
-  <div id="verkehr"></div>
-</div>
-
-<div id="map"></div>
-<div id="overlayCO2"></div>
-<div id="overlayTime"></div>
-
-<script>
-
-// Karte
-var map = L.map('map').setView([53.36, 10.21], 10);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-// Winsen Marker
-var winsen = [53.36, 10.21];
-L.marker(winsen).addTo(map);
-
-// Ziele
-const orte = {
-  "Tespe": [53.40, 10.32],
-  "Hamburg Großneumarkt": [53.55, 9.98],
-  "Bendestorf": [53.34, 9.97],
-  "Gifhorn Mühlenmuseum": [52.48, 10.55],
-  "Hannover Flughafen": [52.46, 9.68]
-};
-
-// Dummy-Routen (einfach Linien → wirkt aber gut!)
-function getRoute(ziel){
-  return [winsen, ziel];
-}
-
-// CO2 + Zeit Werte
-const daten = {
-  "Tespe": {
-    "Auto": {co2:"2 kg", time:"00:15"},
-    "E-Auto": {co2:"1 kg", time:"00:15"},
-    "ÖPNV": {co2:"1.5 kg", time:"00:35"},
-    "E-Bike": {co2:"0 kg", time:"00:45"}
-  },
-  "Hamburg Großneumarkt": {
-    "Auto": {co2:"8 kg", time:"00:35"},
-    "E-Auto": {co2:"4 kg", time:"00:35"},
-    "ÖPNV": {co2:"3 kg", time:"00:50"},
-    "E-Bike": {co2:"0 kg", time:"01:20"}
-  }
-};
-
-let aktuelleRoute;
-let aktuellesZiel;
-
-// Ziele anzeigen
-const zielDiv = document.getElementById("ziele");
-
-for(let ort in orte){
-  let btn = document.createElement("button");
-  btn.innerText = ort;
-
-  btn.onclick = function(){
-    aktuellesZiel = ort;
-    zeichneRoute(orte[ort]);
-    zeigeVerkehr();
-  }
-
-  zielDiv.appendChild(btn);
-}
-
-// Route zeichnen (Animation light)
-function zeichneRoute(ziel){
-
-  if(aktuelleRoute) map.removeLayer(aktuelleRoute);
-
-  let coords = getRoute(ziel);
-
-  aktuelleRoute = L.polyline(coords, {color:"blue"}).addTo(map);
-
-  map.fitBounds(aktuelleRoute.getBounds());
-}
-
-// Verkehrsmittel anzeigen
-function zeigeVerkehr(){
-
-  const verkehrDiv = document.getElementById("verkehr");
-  verkehrDiv.innerHTML = "";
-
-  ["Auto","E-Auto","ÖPNV","E-Bike"].forEach(v => {
-    let btn = document.createElement("button");
-    btn.innerText = v;
-
-    btn.onclick = function(){
-      zeigeOverlay(v);
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: Roboto, Arial, sans-serif;
+      background: #000;
+      overflow: hidden;
     }
 
-    verkehrDiv.appendChild(btn);
-  });
-}
+    #app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
 
-// Overlay anzeigen
-function zeigeOverlay(v){
+    #panel {
+      width: 340px;
+      min-width: 340px;
+      background: #000;
+      color: #fff;
+      padding: 24px 16px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      z-index: 1000;
+    }
 
-  let data = daten[aktuellesZiel]?.[v];
-  if(!data) return;
+    #title {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin: 8px 0 6px 0;
+    }
 
-  let center = aktuelleRoute.getBounds().getCenter();
-  let point = map.latLngToContainerPoint(center);
+    #subtitle {
+      font-size: 15px;
+      color: rgba(255,255,255,0.72);
+      min-height: 18px;
+    }
 
-  let co2 = document.getElementById("overlayCO2");
-  let time = document.getElementById("overlayTime");
+    .section-label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 4px;
+    }
 
-  co2.style.left = point.x + "px";
-  co2.style.top = point.y + "px";
-  co2.innerHTML = data.co2;
-  co2.style.display = "block";
+    .button-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
 
-  time.style.left = (point.x + 80) + "px";
-  time.style.top = (point.y - 20) + "px";
-  time.innerHTML = data.time;
-  time.style.display = "block";
-}
+    .panel-btn {
+      width: 100%;
+      border: none;
+      background: #2c2c2c;
+      color: #fff;
+      padding: 16px 14px;
+      font-size: 18px;
+      line-height: 1.2;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+    }
 
-</script>
+    .panel-btn:hover {
+      background: #3a3a3a;
+    }
 
+    .panel-btn.active {
+      background: #4b4b4b;
+    }
+
+    .panel-btn.transport {
+      font-size: 17px;
+      padding: 14px 12px;
+    }
+
+    #transportSection {
+      display: none;
+    }
+
+    #mapWrap {
+      position: relative;
+      flex: 1;
+      height: 100%;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      z-index: 1200;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.96);
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .overlay.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    #co2Bubble {
+      background: rgba(0,0,0,0.88);
+      color: #fff;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 21px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+
+    #timeDisplay {
+      color: #fff;
+      font-family: "Courier New", monospace;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(0,0,0,0.55);
+      padding: 6px 12px;
+      border-radius: 10px;
+      white-space: nowrap;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    }
+
+    .leaflet-control-attribution {
+      display: none !important;
+    }
+
+    .leaflet-control-zoom a {
+      width: 34px;
+      height: 34px;
+      line-height: 34px;
+      font-size: 22px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <div id="title">Von Winsen nach…</div>
+      <div id="subtitle"></div>
+
+      <div>
+        <div class="section-label">Ziele</div>
+        <div id="destinationList" class="button-list"></div>
+      </div>
+
+      <div id="transportSection">
+        <div class="section-label">Verkehrsmittel</div>
+        <div id="transportList" class="button-list"></div>
+      </div>
+    </aside>
+
+    <div id="mapWrap">
+      <div id="map"></div>
+      <div id="co2Bubble" class="overlay"></div>
+      <div id="timeDisplay" class="overlay"></div>
+    </div>
+  </div>
+
+  <script>
+    const winsen = [53.3608, 10.2125];
+
+    const destinations = {
+      "Tespe": {
+        center: [53.3980, 10.4150],
+        route: [
+          [53.3608, 10.2125],
+          [53.3640, 10.2400],
+          [53.3710, 10.2850],
+          [53.3800, 10.3300],
+          [53.3890, 10.3700],
+          [53.3980, 10.4150]
+        ],
+        values: {
+          "Auto":   { co2: "2,4 kg CO₂", time: "00:19" },
+          "E-Auto": { co2: "1,1 kg CO₂", time: "00:19" },
+          "ÖPNV":   { co2: "0,9 kg CO₂", time: "00:43" },
+          "E-Bike": { co2: "0 kg CO₂",   time: "00:46" }
+        }
+      },
+
+      "Hamburg Großneumarkt": {
+        center: [53.5505, 9.9775],
+        route: [
+          [53.3608, 10.2125],
+          [53.3840, 10.1700],
+          [53.4130, 10.1350],
+          [53.4510, 10.0900],
+          [53.4900, 10.0450],
+          [53.5230, 10.0100],
+          [53.5505, 9.9775]
+        ],
+        values: {
+          "Auto":   { co2: "7,8 kg CO₂", time: "00:37" },
+          "E-Auto": { co2: "3,4 kg CO₂", time: "00:37" },
+          "ÖPNV":   { co2: "2,6 kg CO₂", time: "00:48" },
+          "E-Bike": { co2: "0 kg CO₂",   time: "01:54" }
+        }
+      },
+
+      "Bendestorf": {
+        center: [53.3425, 9.9660],
+        route: [
+          [53.3608, 10.2125],
+          [53.3590, 10.1750],
+          [53.3560, 10.1320],
+          [53.3520, 10.0880],
+          [53.3470, 10.0350],
+          [53.3425, 9.9660]
+        ],
+        values: {
+          "Auto":   { co2: "4,1 kg CO₂", time: "00:24" },
+          "E-Auto": { co2: "1,8 kg CO₂", time: "00:24" },
+          "ÖPNV":   { co2: "1,7 kg CO₂", time: "00:52" },
+          "E-Bike": { co2: "0 kg CO₂",   time: "01:05" }
+        }
+      },
+
+      "Gifhorn Mühlenmuseum": {
+        center: [52.4870, 10.5500],
+        route: [
+          [53.3608, 10.2125],
+          [53.2500, 10.2500],
+          [53.1400, 10.3100],
+          [53.0100, 10.3600],
+          [52.8800, 10.4300],
+          [52.7200, 10.5000],
+          [52.6000, 10.5350],
+          [52.4870, 10.5500]
+        ],
+        values: {
+          "Auto":   { co2: "16,8 kg CO₂", time: "01:22" },
+          "E-Auto": { co2: "7,0 kg CO₂",  time: "01:22" },
+          "ÖPNV":   { co2: "6,3 kg CO₂",  time: "02:31" },
+          "E-Bike": { co2: "0 kg CO₂",    time: "04:42" }
+        }
+      },
+
+      "Hannover Flughafen": {
+        center: [52.4612, 9.6851],
+        route: [
+          [53.3608, 10.2125],
+          [53.2900, 10.1400],
+          [53.2100, 10.0500],
+          [53.1100, 9.9550],
+          [53.0000, 9.8600],
+          [52.8800, 9.7850],
+          [52.7400, 9.7350],
+          [52.6000, 9.7050],
+          [52.4612, 9.6851]
+        ],
+        values: {
+          "Auto":   { co2: "18,9 kg CO₂", time: "01:28" },
+          "E-Auto": { co2: "7,9 kg CO₂",  time: "01:28" },
+          "ÖPNV":   { co2: "7,2 kg CO₂",  time: "02:12" },
+          "E-Bike": { co2: "0 kg CO₂",    time: "05:08" }
+        }
+      }
+    };
+
+    const transportModes = ["Auto", "E-Auto", "ÖPNV", "E-Bike"];
+
+    const map = L.map('map', {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([53.18, 10.06], 9);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18
+    }).addTo(map);
+
+    const startMarker = L.marker(winsen).addTo(map);
+
+    let destinationMarker = null;
+    let routeLine = null;
+    let animatedLine = null;
+    let currentDestination = null;
+    let currentTransport = null;
+    let animationFrame = null;
+    let routePixelsListenerBound = false;
+
+    const subtitle = document.getElementById('subtitle');
+    const destinationList = document.getElementById('destinationList');
+    const transportSection = document.getElementById('transportSection');
+    const transportList = document.getElementById('transportList');
+    const co2Bubble = document.getElementById('co2Bubble');
+    const timeDisplay = document.getElementById('timeDisplay');
+
+    function resetOverlays() {
+      co2Bubble.classList.remove('visible');
+      timeDisplay.classList.remove('visible');
+    }
+
+    function clearTransportSelection() {
+      const buttons = transportList.querySelectorAll('.panel-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      currentTransport = null;
+      resetOverlays();
+    }
+
+    function setActiveDestinationButton(name) {
+      const buttons = destinationList.querySelectorAll('.panel-btn');
+      buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.name === name);
+      });
+    }
+
+    function setActiveTransportButton(mode) {
+      const buttons = transportList.querySelectorAll('.panel-btn');
+      buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+    }
+
+    function midpointLatLng(route) {
+      const midIndex = Math.floor(route.length / 2);
+      return L.latLng(route[midIndex][0], route[midIndex][1]);
+    }
+
+    function updateOverlayPosition() {
+      if (!currentDestination || !currentTransport) return;
+
+      const route = destinations[currentDestination].route;
+      const mid = midpointLatLng(route);
+      const point = map.latLngToContainerPoint(mid);
+
+      co2Bubble.style.left = `${point.x - 45}px`;
+      co2Bubble.style.top = `${point.y + 6}px`;
+
+      timeDisplay.style.left = `${point.x + 48}px`;
+      timeDisplay.style.top = `${point.y - 26}px`;
+    }
+
+    function showTransportData(mode) {
+      const values = destinations[currentDestination].values[mode];
+      if (!values) return;
+
+      currentTransport = mode;
+      setActiveTransportButton(mode);
+
+      co2Bubble.textContent = values.co2;
+      timeDisplay.textContent = values.time;
+
+      updateOverlayPosition();
+
+      co2Bubble.classList.add('visible');
+      timeDisplay.classList.add('visible');
+    }
+
+    function showDestinationMarker(latlng) {
+      if (destinationMarker) {
+        map.removeLayer(destinationMarker);
+      }
+      destinationMarker = L.marker(latlng).addTo(map);
+    }
+
+    function clearRouteLayers() {
+      if (routeLine) {
+        map.removeLayer(routeLine);
+        routeLine = null;
+      }
+      if (animatedLine) {
+        map.removeLayer(animatedLine);
+        animatedLine = null;
+      }
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+    }
+
+    function animateRoute(routeCoords) {
+      clearRouteLayers();
+
+      animatedLine = L.polyline([], {
+        color: '#0b46ff',
+        weight: 5,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      let step = 0;
+      const totalSteps = routeCoords.length;
+
+      function drawStep() {
+        step++;
+        const partial = routeCoords.slice(0, step);
+        animatedLine.setLatLngs(partial);
+
+        if (step < totalSteps) {
+          animationFrame = requestAnimationFrame(() => {
+            setTimeout(drawStep, 70);
+          });
+        } else {
+          animationFrame = null;
+          routeLine = animatedLine;
+          animatedLine = null;
+
+          if (currentTransport) {
+            updateOverlayPosition();
+            co2Bubble.classList.add('visible');
+            timeDisplay.classList.add('visible');
+          }
+        }
+      }
+
+      drawStep();
+    }
+
+    function selectDestination(name) {
+      currentDestination = name;
+      const destination = destinations[name];
+
+      subtitle.textContent = name;
+      setActiveDestinationButton(name);
+      clearTransportSelection();
+      transportSection.style.display = 'block';
+
+      showDestinationMarker(destination.center);
+
+      const bounds = L.latLngBounds(destination.route);
+      map.fitBounds(bounds, {
+        padding: [80, 80]
+      });
+
+      animateRoute(destination.route);
+    }
+
+    function buildDestinations() {
+      Object.keys(destinations).forEach(name => {
+        const btn = document.createElement('button');
+        btn.className = 'panel-btn';
+        btn.textContent = name;
+        btn.dataset.name = name;
+        btn.addEventListener('click', () => selectDestination(name));
+        destinationList.appendChild(btn);
+      });
+    }
+
+    function buildTransportButtons() {
+      transportModes.forEach(mode => {
+        const btn = document.createElement('button');
+        btn.className = 'panel-btn transport';
+        btn.textContent = mode;
+        btn.dataset.mode = mode;
+        btn.addEventListener('click', () => {
+          if (!currentDestination) return;
+          showTransportData(mode);
+        });
+        transportList.appendChild(btn);
+      });
+    }
+
+    buildDestinations();
+    buildTransportButtons();
+
+    map.on('move zoom resize', () => {
+      if (currentTransport) {
+        updateOverlayPosition();
+      }
+    });
+  </script>
 </body>
 </html>
