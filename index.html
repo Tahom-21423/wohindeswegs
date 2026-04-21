@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mobilitätsvergleich</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 320px;
+      background: #111;
+      color: #fff;
+      padding: 20px;
+      box-sizing: border-box;
+      z-index: 1000;
+      overflow-y: auto;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 320px;
+      right: 0;
+      bottom: 0;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 18px 0;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 22px 0 10px 0;
+      font-weight: bold;
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px 12px;
+      font-size: 17px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #2b2b2b;
+      color: #fff;
+      text-align: left;
+      transition: background 0.15s ease;
+    }
+
+    button:hover {
+      background: #3a3a3a;
+    }
+
+    button.active {
+      background: #c62828;
+    }
+
+    #result {
+      margin-top: 24px;
+      padding: 16px;
+      background: #1c1c1c;
+      border-radius: 12px;
+      min-height: 120px;
+    }
+
+    .label {
+      font-size: 13px;
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+
+    .value {
+      font-size: 26px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+
+    .small {
+      font-size: 14px;
+      opacity: 0.8;
+      line-height: 1.4;
+    }
+
+    .hint {
+      margin-top: 18px;
+      font-size: 13px;
+      opacity: 0.75;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="panel">
+    <h1>Mobilität im Vergleich</h1>
+
+    <h2>Ziel</h2>
+    <div class="button-group" id="targetButtons">
+      <button data-target="tespe">Tespe</button>
+      <button data-target="grossneumarkt">Hamburg Großneumarkt</button>
+      <button data-target="bendestorf">Bendestorf</button>
+      <button data-target="gifhorn">Gifhorn Mühlenmuseum</button>
+      <button data-target="hannover">Hannover Flughafen</button>
+    </div>
+
+    <h2>Verkehrsmittel</h2>
+    <div class="button-group" id="modeButtons">
+      <button data-mode="combustion">Verbrenner</button>
+      <button data-mode="electric">E-Auto</button>
+      <button data-mode="ebike">E-Bike</button>
+    </div>
+
+    <div id="result">
+      <div class="small">Bitte Ziel und Verkehrsmittel auswählen.</div>
+    </div>
+
+    <div class="hint">
+      Echte Straßenrouten für Auto und Fahrrad.<br>
+      E-Auto nutzt dieselbe Route wie Auto, aber mit anderem CO₂-Wert.
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    // Startpunkt: Winsen (Schloßplatz 11) - angenäherte Koordinate
+    const START = {
+      name: "Winsen (Schloßplatz 11)",
+      lat: 53.3608,
+      lon: 10.2140
+    };
+
+    const TARGETS = {
+      tespe: {
+        name: "Tespe",
+        lat: 53.3964,
+        lon: 10.4144
+      },
+      grossneumarkt: {
+        name: "Hamburg Großneumarkt",
+        lat: 53.5506,
+        lon: 9.9786
+      },
+      bendestorf: {
+        name: "Bendestorf",
+        lat: 53.3426,
+        lon: 9.9637
+      },
+      gifhorn: {
+        name: "Gifhorn Mühlenmuseum",
+        lat: 52.4860,
+        lon: 10.5472
+      },
+      hannover: {
+        name: "Hannover Flughafen",
+        lat: 52.4611,
+        lon: 9.6851
+      }
+    };
+
+    // CO2-Faktoren in g/km
+    const CO2_FACTORS = {
+      combustion: 150,
+      electric: 60,
+      ebike: 5
+    };
+
+    // Routing-Profile für den öffentlichen FOSSGIS-Server
+    // Auto / Fahrrad werden unterstützt.
+    const ROUTE_PROFILE = {
+      combustion: "driving",
+      electric: "driving",
+      ebike: "bike"
+    };
+
+    let selectedTarget = null;
+    let selectedMode = null;
+    let routeLayer = null;
+    let destinationMarker = null;
+
+    const map = L.map('map', {
+      zoomControl: true
+    }).setView([START.lat, START.lon], 9);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap-Mitwirkende'
+    }).addTo(map);
+
+    const startMarker = L.marker([START.lat, START.lon]).addTo(map);
+    startMarker.bindPopup("Winsen (Schloßplatz 11)");
+
+    function setActiveButton(groupId, key, attrName) {
+      document.querySelectorAll(`#${groupId} button`).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset[attrName] === key);
+      });
+    }
+
+    function formatDistance(km) {
+      if (km < 10) return km.toFixed(1).replace('.', ',') + ' km';
+      return Math.round(km) + ' km';
+    }
+
+    function formatDuration(seconds) {
+      const totalMin = Math.round(seconds / 60);
+      const hours = Math.floor(totalMin / 60);
+      const mins = totalMin % 60;
+
+      if (hours === 0) return `${mins} Min.`;
+      if (mins === 0) return `${hours} Std.`;
+      return `${hours} Std. ${mins} Min.`;
+    }
+
+    function formatCo2(grams) {
+      if (grams >= 1000) {
+        return (grams / 1000).toFixed(1).replace('.', ',') + ' kg';
+      }
+      return Math.round(grams) + ' g';
+    }
+
+    async function loadRoute() {
+      if (!selectedTarget || !selectedMode) return;
+
+      const target = TARGETS[selectedTarget];
+      const profile = ROUTE_PROFILE[selectedMode];
+
+      const url = `https://routing.openstreetmap.de/routed-${profile}/route/v1/driving/` +
+        `${START.lon},${START.lat};${target.lon},${target.lat}` +
+        `?overview=full&geometries=geojson`;
+
+      const resultBox = document.getElementById('result');
+      resultBox.innerHTML = `<div class="small">Route wird geladen …</div>`;
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.routes || !data.routes.length) {
+          throw new Error('Keine Route gefunden.');
+        }
+
+        const route = data.routes[0];
+        const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+
+        if (routeLayer) {
+          map.removeLayer(routeLayer);
+        }
+        if (destinationMarker) {
+          map.removeLayer(destinationMarker);
+        }
+
+        routeLayer = L.polyline(coords, {
+          color: selectedMode === 'ebike' ? '#1976d2' : '#c62828',
+          weight: 6,
+          opacity: 0.9
+        }).addTo(map);
+
+        destinationMarker = L.marker([target.lat, target.lon]).addTo(map);
+        destinationMarker.bindPopup(target.name);
+
+        map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
+
+        const distanceKm = route.distance / 1000;
+        const durationSec = route.duration;
+        const co2Grams = distanceKm * CO2_FACTORS[selectedMode];
+
+        resultBox.innerHTML = `
+          <div class="label">Strecke</div>
+          <div class="value" style="font-size:20px;">${START.name} → ${target.name}</div>
+
+          <div class="label">Reisezeit</div>
+          <div class="value">${formatDuration(durationSec)}</div>
+
+          <div class="label">CO₂-Ausstoß</div>
+          <div class="value">${formatCo2(co2Grams)}</div>
+
+          <div class="small">Entfernung: ${formatDistance(distanceKm)}</div>
+        `;
+      } catch (error) {
+        console.error(error);
+        resultBox.innerHTML = `
+          <div class="small">
+            Die Route konnte gerade nicht geladen werden.<br><br>
+            Mögliche Ursache: keine Internetverbindung oder Routingdienst nicht erreichbar.
+          </div>
+        `;
+      }
+    }
+
+    document.querySelectorAll('#targetButtons button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedTarget = btn.dataset.target;
+        setActiveButton('targetButtons', selectedTarget, 'target');
+        loadRoute();
+      });
+    });
+
+    document.querySelectorAll('#modeButtons button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedMode = btn.dataset.mode;
+        setActiveButton('modeButtons', selectedMode, 'mode');
+        loadRoute();
+      });
+    });
+  </script>
+</body>
+</html>
